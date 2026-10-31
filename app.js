@@ -23,10 +23,16 @@ const guess = name => { const n = norm(name); let best = 'autres', bs = 0; for (
 
 /* ---------- état local ---------- */
 const META = 'courses_meta';
-let M = Object.assign({ fam: '', stores: ['Carrefour', 'Leclerc', 'Lidl', 'Intermarché', 'Monoprix', 'Picard'], habits: {}, relay: '' }, JSON.parse(localStorage.getItem(META) || '{}'));
+let M = Object.assign({ fam: '', stores: ['Carrefour', 'Leclerc', 'Lidl', 'Intermarché', 'Monoprix', 'Picard'], habits: {}, relay: '', theme: 'auto' }, JSON.parse(localStorage.getItem(META) || '{}'));
 let items = [];
 const ikey = () => 'courses_items_' + (M.fam || 'local');
 try { items = JSON.parse(localStorage.getItem(ikey()) || '[]'); } catch (e) { items = []; }
+const applyTheme = () => { if (M.theme === 'light' || M.theme === 'dark') document.documentElement.dataset.theme = M.theme; else delete document.documentElement.dataset.theme; };
+applyTheme();
+let inst = null;
+addEventListener('beforeinstallprompt', e => { e.preventDefault(); inst = e; });
+addEventListener('appinstalled', () => { inst = null; toast('Application installée.'); });
+const standalone = () => matchMedia('(display-mode: standalone)').matches || navigator.standalone === true;
 const saveMeta = () => localStorage.setItem(META, JSON.stringify(M));
 const saveItems = () => { try { localStorage.setItem(ikey(), JSON.stringify(items)); } catch (e) {} };
 let storeFilter = 'all', pending = false;
@@ -198,6 +204,8 @@ function join(code) {
 }
 $('#menu').onclick = () => {
   open(`<h2>Réglages</h2>
+  ${standalone() ? '<p class="hint">Application installée sur cet appareil.</p>' : '<button class="btn p" id="r-inst">Installer l’application</button>'}
+  <label>Apparence</label><select id="r-th"><option value="auto">Automatique (réglage du téléphone)</option><option value="light">Clair</option><option value="dark">Sombre</option></select>
   <label>Liste partagée (code foyer)</label>
   ${M.fam ? `<p><b style="font:800 1.3rem ui-monospace,monospace;letter-spacing:2px">${M.fam}</b></p><button class="btn" id="r-cp">Copier le lien d’invitation</button><button class="btn d" id="r-qt">Quitter la liste partagée</button>`
     : `${F ? '<button class="btn p" id="r-new">Créer une liste partagée</button><input id="r-code" class="field" placeholder="Ou saisir un code reçu (8 à 20 caractères)" style="margin-top:10px"><button class="btn" id="r-join">Rejoindre</button>' : '<p class="hint">Synchro indisponible (voir firebase-config.js ou connexion).</p>'}`}
@@ -206,6 +214,12 @@ $('#menu').onclick = () => {
   <p class="hint" id="r-msg" role="status"></p>
   <button class="btn p" id="r-ok">Enregistrer</button><button class="btn" data-x>Fermer</button>`);
   const s = id => $(id, sheet);
+  s('#r-th').value = M.theme || 'auto';
+  s('#r-th').onchange = e => { M.theme = e.target.value; saveMeta(); applyTheme(); };
+  if (s('#r-inst')) s('#r-inst').onclick = async () => {
+    if (inst) { inst.prompt(); try { await inst.userChoice; } catch (e) {} inst = null; return; }
+    s('#r-msg').textContent = 'Chrome ne propose pas encore l’installation automatique. Ouvrez le menu ⋮ du navigateur, puis « Installer l’application » (ou « Ajouter à l’écran d’accueil »). L’adresse doit commencer par https://.';
+  };
   if (s('#r-new')) s('#r-new').onclick = () => { join(genCode()); sheet.close(); toast('Liste partagée créée.'); $('#menu').click(); };
   if (s('#r-join')) s('#r-join').onclick = () => { const c = s('#r-code').value.toUpperCase().replace(/[^A-Z0-9]/g, ''); if (c.length < 8) return toast('Le code a au moins 8 caractères.'); join(c); sheet.close(); };
   if (s('#r-cp')) s('#r-cp').onclick = () => navigator.clipboard.writeText(location.origin + location.pathname + '#f=' + M.fam).then(() => toast('Lien copié.'));
