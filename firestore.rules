@@ -1,0 +1,26 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // --- Mes Badges (inchangé) ---
+    match /families/{code} {
+      allow get, create, update, delete: if code.size() >= 8 && code.size() <= 20
+        && (request.method == 'get' || request.method == 'delete'
+            || request.resource.data.keys().hasOnly(['kids','pos','neg','pin','updated']));
+      allow list: if false;
+      match /events/{id} {
+        allow get, list, delete: if code.size() >= 8 && code.size() <= 20;
+        allow create: if code.size() >= 8 && code.size() <= 20
+          && request.resource.data.keys().hasOnly(['id','kid','type','label','ts'])
+          && request.resource.data.label is string && request.resource.data.label.size() < 120;
+        allow update: if false;
+      }
+    }
+    // --- Mes courses : un code secret = une liste partagée ---
+    match /lists/{code}/items/{id} {
+      allow get, list, delete: if code.size() >= 8 && code.size() <= 20;
+      allow create, update: if code.size() >= 8 && code.size() <= 20
+        && request.resource.data.keys().hasOnly(['id','name','qty','cat','store','price','note','done','img','ts'])
+        && request.resource.data.name is string && request.resource.data.name.size() < 120;
+    }
+  }
+}
