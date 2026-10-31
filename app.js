@@ -135,8 +135,10 @@ $('#sug').onclick = e => { const b = e.target.closest('[data-h]'); if (b) addIte
 $('#q').addEventListener('input', sugs);
 $('#qa').onsubmit = e => { e.preventDefault(); const q = $('#q'); addItem(q.value); q.value = ''; };
 
+const big = u => String(u).replace(/\.\d+\.jpg$/, '.400.jpg');
 function edit(it) {
   open(`<h2>Modifier</h2>
+  ${it.img ? `<img class="big" src="${esc(big(it.img))}" onerror="this.onerror=null;this.src='${esc(it.img)}'" alt="Photo : ${esc(it.name)}">` : ''}
   <label>Article<input id="e-n" class="field" value="${esc(it.name)}"></label>
   <div class="two"><label>Quantité<input id="e-q" class="field" type="number" min="1" inputmode="numeric" value="${it.qty || 1}"></label>
   <label>Prix par unité (€)<input id="e-p" class="field" inputmode="decimal" value="${it.price != null ? String(it.price).replace('.', ',') : ''}"></label></div>
