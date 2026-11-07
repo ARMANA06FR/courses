@@ -16,3 +16,6 @@ Coller `worker.js` dans un Worker gratuit, puis Réglages > adresse du relais. S
 Le scan utilise la caméra (Chrome Android) ; ailleurs, l'appli demande de saisir le numéro du code-barres.
 
 Mise à jour du code : changer `V` dans `sw.js`.
+
+## Si « synchro impossible » s'affiche
+Touchez l'état en haut de l'écran : l'appli indique le code d'erreur. Le plus fréquent est `permission-denied` : publier le contenu de `firestore.rules` dans Firestore > Règles (un `firebase deploy` depuis le dossier Mes Badges remet les anciennes règles).

@@ -49,3 +49,5 @@ video{width:100%;border-radius:12px;background:#000}
 .mv{width:36px;height:36px;border:1px solid var(--line);background:none;border-radius:8px;flex:none}
 .mv:disabled{opacity:.3}
 textarea{resize:vertical}
+.st{border:0;background:none;color:#fff;font-size:.75rem;opacity:.85;padding:4px}
+.st.err{opacity:1;text-decoration:underline;color:#FFB4A8}

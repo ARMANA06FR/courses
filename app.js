@@ -50,7 +50,9 @@ let F = null, unsub = null;
 const FIELDS = ['id', 'name', 'qty', 'cat', 'store', 'price', 'note', 'done', 'img', 'ts'];
 const clean = it => Object.fromEntries(FIELDS.map(k => [k, it[k] ?? (k === 'price' ? null : k === 'qty' ? 1 : k === 'done' ? false : k === 'ts' ? Date.now() : '')]));
 const ref = id => F.f.doc(F.db, 'lists', M.fam, 'items', id);
-const safe = p => p && p.catch && p.catch(() => toast('Synchro impossible'));
+let syncErr = '';
+const fail = e => { syncErr = (e && e.code) || 'inconnue'; status(); };
+const safe = p => p && p.catch && p.catch(e => { fail(e); toast('Synchro impossible : touchez l’état en haut pour voir pourquoi.'); });
 async function initFb() {
   if (!cfg.apiKey) return;
   try {
@@ -75,8 +77,8 @@ function startSync() {
       for (let i = 0; i < seed.length; i += 400) { const b = f.writeBatch(db); seed.slice(i, i + 400).forEach(x => b.set(ref(x.id), clean(x))); safe(b.commit()); }
     } else items = snap.docs.map(d => d.data());
     seed = [];
-    pending = snap.metadata.hasPendingWrites; saveItems(); render(); status();
-  }, () => { $('#st').textContent = 'synchro impossible'; });
+    pending = snap.metadata.hasPendingWrites; syncErr = ''; saveItems(); render(); status();
+  }, fail);
   const watch = (n, key, tsK, dirty, push) => f.onSnapshot(metaDoc(n), s => {
     const d = s.data();
     if (d && d.ts > (M[tsK] || 0)) { try { M[key] = JSON.parse(d.json); M[tsK] = d.ts; saveMeta(); if (key === 'rayons') compile(); render(); } catch (e) {} }
@@ -87,7 +89,18 @@ function startSync() {
   unsub = () => { u1(); u2(); u3(); };
 }
 function saveStores(l) { M.stores = l; M.storesTs = Date.now(); saveMeta(); render(); pushStores(); }
-const status = () => { $('#st').textContent = !M.fam ? 'sur cet appareil' : !navigator.onLine ? 'hors ligne' : pending ? 'synchro…' : 'synchronisé'; };
+const status = () => { const b = $('#st'); b.textContent = !M.fam ? 'sur cet appareil' : syncErr ? 'synchro impossible : détails' : !navigator.onLine ? 'hors ligne' : pending ? 'synchro…' : 'synchronisé'; b.classList.toggle('err', !!syncErr); };
+$('#st').onclick = () => { if (syncErr) diag(); };
+function diag() {
+  const perm = syncErr === 'permission-denied';
+  open(`<h2>Synchro impossible</h2><p class="hint">Code d’erreur : <b>${esc(syncErr)}</b></p>` + (perm
+    ? `<p>Firestore refuse l’accès à la liste : les règles de sécurité publiées dans le projet ne contiennent pas la partie « lists » de cette appli (ou ont été remplacées, par exemple par un déploiement de Mes Badges).</p>
+  <ol><li>Touchez « Copier les règles ».</li><li>Console Firebase, projet badges06 : Firestore Database, onglet Règles.</li><li>Remplacez tout le contenu par les règles copiées, puis Publier.</li><li>Revenez ici et touchez « Réessayer ».</li></ol><button class="btn p" id="d-cp">Copier les règles</button>`
+    : `<p>${syncErr === 'unavailable' ? 'Firestore est injoignable : vérifiez la connexion, et que la base Firestore existe bien dans le projet Firebase.' : 'Erreur inattendue de Firestore. Réessayez ; si elle persiste, notez le code ci-dessus.'}</p>`)
+    + '<button class="btn" id="d-rt">Réessayer</button><button class="btn" data-x>Fermer</button>');
+  if ($('#d-cp', sheet)) $('#d-cp', sheet).onclick = async () => { try { await navigator.clipboard.writeText(await (await fetch('./firestore.rules', { cache: 'no-store' })).text()); toast('Règles copiées.'); } catch (e) { toast('Copie impossible : ouvrez le fichier firestore.rules.'); } };
+  $('#d-rt', sheet).onclick = () => { syncErr = ''; sheet.close(); startSync(); status(); };
+}
 addEventListener('online', status); addEventListener('offline', status);
 
 /* ---------- actions ---------- */
