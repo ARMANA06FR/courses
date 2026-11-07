@@ -29,7 +29,8 @@ const guess = name => { const n = norm(name); let best = 'autres', bs = 0; for (
 
 /* ---------- état local ---------- */
 const META = 'courses_meta';
-let M = Object.assign({ fam: '', stores: ['Carrefour', 'Leclerc', 'Lidl', 'Intermarché', 'Monoprix', 'Picard'], habits: {}, relay: '', theme: 'auto', rayons: null, rayonsTs: 0 }, JSON.parse(localStorage.getItem(META) || '{}'));
+const DEF_STORES = ['Carrefour', 'Leclerc', 'Lidl', 'Intermarché', 'Monoprix', 'Picard'];
+let M = Object.assign({ fam: '', stores: DEF_STORES.slice(), storesTs: 0, habits: {}, relay: '', theme: 'auto', rayons: null, rayonsTs: 0 }, JSON.parse(localStorage.getItem(META) || '{}'));
 compile();
 let items = [];
 const ikey = () => 'courses_items_' + (M.fam || 'local');
@@ -58,24 +59,34 @@ async function initFb() {
     F = { f, db: f.initializeFirestore(a.initializeApp(cfg), { localCache: f.persistentLocalCache({ tabManager: f.persistentMultipleTabManager() }) }) };
   } catch (e) { F = null; }
 }
+let seed = [];
+const metaDoc = n => F.f.doc(F.db, 'lists', M.fam, 'meta', n);
+const pushMeta = (n, v, ts) => F && M.fam && safe(F.f.setDoc(metaDoc(n), { json: JSON.stringify(v), ts }));
+const pushRayons = () => pushMeta('rayons', M.rayons, M.rayonsTs);
+const pushStores = () => { if (!M.storesTs) { M.storesTs = Date.now(); saveMeta(); } pushMeta('stores', M.stores, M.storesTs); };
 function startSync() {
   if (unsub) unsub(); unsub = null;
   if (!F || !M.fam) return status();
   const { f, db } = F;
+  seed = items.slice();
   const u1 = f.onSnapshot(f.collection(db, 'lists', M.fam, 'items'), snap => {
-    if (snap.empty && !snap.metadata.fromCache && items.length) {
-      for (let i = 0; i < items.length; i += 400) { const b = f.writeBatch(db); items.slice(i, i + 400).forEach(x => b.set(ref(x.id), clean(x))); safe(b.commit()); }
+    if (snap.empty && snap.metadata.fromCache) { status(); return; }
+    if (snap.empty && seed.length) {
+      for (let i = 0; i < seed.length; i += 400) { const b = f.writeBatch(db); seed.slice(i, i + 400).forEach(x => b.set(ref(x.id), clean(x))); safe(b.commit()); }
     } else items = snap.docs.map(d => d.data());
+    seed = [];
     pending = snap.metadata.hasPendingWrites; saveItems(); render(); status();
   }, () => { $('#st').textContent = 'synchro impossible'; });
-  const u2 = f.onSnapshot(f.doc(db, 'lists', M.fam, 'meta', 'rayons'), s => {
+  const watch = (n, key, tsK, dirty, push) => f.onSnapshot(metaDoc(n), s => {
     const d = s.data();
-    if (d && d.ts > (M.rayonsTs || 0)) { try { M.rayons = JSON.parse(d.json); M.rayonsTs = d.ts; saveMeta(); compile(); render(); } catch (e) {} }
-    else if (!s.exists() && !s.metadata.fromCache && M.rayons) pushRayons();
+    if (d && d.ts > (M[tsK] || 0)) { try { M[key] = JSON.parse(d.json); M[tsK] = d.ts; saveMeta(); if (key === 'rayons') compile(); render(); } catch (e) {} }
+    else if (!s.exists() && !s.metadata.fromCache && dirty()) push();
   }, () => {});
-  unsub = () => { u1(); u2(); };
+  const u2 = watch('rayons', 'rayons', 'rayonsTs', () => !!M.rayons, pushRayons);
+  const u3 = watch('stores', 'stores', 'storesTs', () => M.stores.join('|') !== DEF_STORES.join('|'), pushStores);
+  unsub = () => { u1(); u2(); u3(); };
 }
-const pushRayons = () => F && M.fam && safe(F.f.setDoc(F.f.doc(F.db, 'lists', M.fam, 'meta', 'rayons'), { json: JSON.stringify(M.rayons), ts: M.rayonsTs }));
+function saveStores(l) { M.stores = l; M.storesTs = Date.now(); saveMeta(); render(); pushStores(); }
 const status = () => { $('#st').textContent = !M.fam ? 'sur cet appareil' : !navigator.onLine ? 'hors ligne' : pending ? 'synchro…' : 'synchronisé'; };
 addEventListener('online', status); addEventListener('offline', status);
 
@@ -109,10 +120,14 @@ function toast(t) { $('#toast')?.remove(); const e = document.createElement('div
 const open = html => { sheet.innerHTML = html; if (!sheet.open) sheet.showModal(); };
 let stream = null;
 sheet.addEventListener('close', () => { if (stream) { stream.getTracks().forEach(t => t.stop()); stream = null; } sheet.innerHTML = ''; });
-sheet.addEventListener('click', e => { if (e.target === sheet || e.target.closest('[data-x]')) sheet.close(); });
+sheet.addEventListener('click', e => {
+  const r = sheet.getBoundingClientRect(), out = e.clientX < r.left || e.clientX > r.right || e.clientY < r.top || e.clientY > r.bottom;
+  if ((e.target === sheet && out) || e.target.closest('[data-x]')) sheet.close();
+});
 
 function render() {
   const stores = M.stores;
+  if (storeFilter !== 'all' && !stores.includes(storeFilter)) storeFilter = 'all';
   $('#chips').innerHTML = stores.length ? ['all', ...stores].map(s => `<button class="chip${storeFilter === s ? ' on' : ''}" data-s="${esc(s)}">${s === 'all' ? 'Tous les magasins' : esc(s)}</button>`).join('') : '';
   const vis = items.filter(i => storeFilter === 'all' || !i.store || i.store === storeFilter);
   const todo = vis.filter(i => !i.done), done = vis.filter(i => i.done);
@@ -152,14 +167,15 @@ $('#qa').onsubmit = e => { e.preventDefault(); const q = $('#q'); addItem(q.valu
 const big = u => String(u).replace(/\.\d+\.jpg$/, '.400.jpg');
 function edit(it) {
   open(`<h2>Modifier</h2>
-  ${it.img ? `<img class="big" src="${esc(big(it.img))}" onerror="this.onerror=null;this.src='${esc(it.img)}'" alt="Photo : ${esc(it.name)}">` : ''}
+  ${it.img ? `<img class="big" src="${esc(big(it.img))}" alt="Photo : ${esc(it.name)}">` : ''}
   <label>Article<input id="e-n" class="field" value="${esc(it.name)}"></label>
   <div class="two"><label>Quantité<input id="e-q" class="field" type="number" min="1" inputmode="numeric" value="${it.qty || 1}"></label>
   <label>Prix par unité (€)<input id="e-p" class="field" inputmode="decimal" value="${it.price != null ? String(it.price).replace('.', ',') : ''}"></label></div>
   <label>Rayon<select id="e-c">${RAYONS.map(r => `<option value="${r.id}"${r.id === rayon(it.cat).id ? ' selected' : ''}>${r.name}</option>`).join('')}</select></label>
-  <label>Magasin<select id="e-s"><option value="">Peu importe</option>${M.stores.map(s => `<option${s === it.store ? ' selected' : ''}>${esc(s)}</option>`).join('')}</select></label>
+  <label>Magasin<select id="e-s"><option value="">Peu importe</option>${[...M.stores, ...(it.store && !M.stores.includes(it.store) ? [it.store] : [])].map(s => `<option${s === it.store ? ' selected' : ''}>${esc(s)}</option>`).join('')}</select></label>
   <label>Note (marque, taille…)<input id="e-o" class="field" value="${esc(it.note)}"></label>
   <button class="btn p" id="e-ok">Enregistrer</button><button class="btn d" id="e-rm">Supprimer</button><button class="btn" data-x>Annuler</button>`);
+  const bi = $('.big', sheet); if (bi) bi.onerror = () => { bi.onerror = null; bi.src = it.img; };
   $('#e-ok', sheet).onclick = () => {
     const name = $('#e-n', sheet).value.trim(); if (!name) return toast('Indiquez le nom.');
     const p = parseFloat($('#e-p', sheet).value.replace(/\s/g, '').replace(',', '.'));
@@ -275,7 +291,8 @@ $('#menu').onclick = () => {
   if (s('#r-cp')) s('#r-cp').onclick = () => navigator.clipboard.writeText(location.origin + location.pathname + '#f=' + M.fam).then(() => toast('Lien copié.'));
   if (s('#r-qt')) s('#r-qt').onclick = () => { if (confirm('Quitter la liste partagée ? Les données restent sur cet appareil.')) { if (unsub) unsub(); unsub = null; M.fam = ''; saveMeta(); saveItems(); status(); render(); sheet.close(); } };
   s('#r-ok').onclick = async () => {
-    M.stores = s('#r-st').value.split(',').map(x => x.trim()).filter(Boolean);
+    const ns = s('#r-st').value.split(',').map(x => x.trim()).filter(Boolean);
+    if (ns.join('|') !== M.stores.join('|')) saveStores(ns);
     M.relay = s('#r-rl').value.trim(); if (M.relay && !/^https?:/i.test(M.relay)) M.relay = 'https://' + M.relay;
     saveMeta();
     if (M.relay) { try { const r = await (await fetch(M.relay.replace(/\/+$/, '') + '/?ping=1')).json(); if (!r.pong) throw 0; } catch (e) { s('#r-msg').textContent = 'Le relais ne répond pas : l’app interroge Open Food Facts directement.'; render(); return; } }
