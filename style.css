@@ -45,3 +45,7 @@ video{width:100%;border-radius:12px;background:#000}
 .hint{color:var(--mut);font-size:.85rem}
 #toast{position:fixed;left:50%;bottom:24px;transform:translateX(-50%);background:var(--ink);color:var(--bg);padding:10px 16px;border-radius:999px;z-index:99}
 .big{display:block;width:100%;max-height:260px;object-fit:contain;background:#fff;border-radius:12px;margin:4px 0 8px}
+.dot{width:12px;height:12px;border-radius:50%;flex:none}
+.mv{width:36px;height:36px;border:1px solid var(--line);background:none;border-radius:8px;flex:none}
+.mv:disabled{opacity:.3}
+textarea{resize:vertical}

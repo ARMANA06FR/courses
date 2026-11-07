@@ -7,7 +7,7 @@ Liste de courses alimentaires et ménagères : rayons dans l'ordre du magasin, f
 2. Ouvrir l'adresse dans Chrome, puis menu ⋮ > Installer l'application.
 
 ## Synchro Firebase (projet `badges06` déjà utilisé, forfait Spark)
-1. Console Firebase > Firestore > Règles : remplacer par le contenu de `firestore.rules` (il garde les règles de « Mes Badges » et ajoute `lists`), puis Publier.
+1. Console Firebase > Firestore > Règles : remplacer par le contenu de `firestore.rules` (il garde les règles de « Mes Badges » et ajoute `lists`, y compris la synchro des rayons), puis Publier.
 2. Réglages > « Créer une liste partagée » : un code s'affiche. « Copier le lien d'invitation » et l'envoyer aux autres téléphones.
 3. Hors ligne, tout reste utilisable et se synchronise au retour du réseau.
 

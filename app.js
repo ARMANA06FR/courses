@@ -5,25 +5,32 @@ const norm = s => String(s || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '
 const uid = () => Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
 const eur = n => new Intl.NumberFormat('fr-FR', { style: 'currency', currency: 'EUR' }).format(n || 0);
 
-/* ---------- rayons (dans l'ordre d'un supermarché) ---------- */
-const RAYONS = [
-  ['fruits', 'Fruits et légumes', '#3E9B3A', 'pomme banane orange citron tomate salade carotte courgette pomme de terre oignon ail poire fraise raisin avocat concombre poivron champignon legume fruit melon pasteque aubergine haricot vert persil basilic clementine kiwi'],
-  ['pain', 'Pain et pâtisserie', '#C98A2B', 'pain baguette brioche croissant viennoiserie gateau tarte pain de mie'],
-  ['viande', 'Boucherie et poisson', '#C2473B', 'viande poulet jambon saucisse steak poisson saumon thon crevette lardon dinde boeuf porc merguez veau saucisson charcuterie cabillaud'],
-  ['cremerie', 'Crèmerie', '#4A8FD4', 'lait beurre yaourt fromage oeuf creme emmental mozzarella gruyere skyr parmesan chevre fromage blanc'],
-  ['epicerie', 'Épicerie', '#9A6B3E', 'pate riz farine sucre sel huile vinaigre conserve sauce cafe the cereale biscuit chocolat confiture miel lentille chips epice moutarde ketchup mayonnaise compote'],
-  ['surgele', 'Surgelés', '#3BA6B5', 'surgele glace pizza frite nugget legumes surgeles'],
-  ['boissons', 'Boissons', '#7A5BC4', 'eau jus soda biere vin cola sirop limonade rose champagne pastis'],
-  ['hygiene', 'Hygiène et beauté', '#D0589B', 'shampoing savon dentifrice gel douche deodorant rasoir coton couche papier toilette mouchoir brosse a dents creme solaire'],
-  ['menage', 'Ménage et entretien', '#D98A1F', 'lessive liquide vaisselle eponge sac poubelle javel nettoyant essuie-tout adoucissant papier alu film aluminium sopalin lave-vaisselle pastille wc detartrant'],
+/* ---------- rayons (dans l'ordre d'un supermarché, modifiables dans les réglages) ---------- */
+const DEF = [
+  ['fruits', 'Fruits et légumes', '#3E9B3A', 'pomme,banane,orange,citron,tomate,salade,carotte,courgette,pomme de terre,oignon,ail,poire,fraise,raisin,avocat,concombre,poivron,champignon,legume,fruit,melon,pasteque,aubergine,haricot vert,persil,basilic,clementine,kiwi'],
+  ['pain', 'Pain et pâtisserie', '#C98A2B', 'pain,baguette,brioche,croissant,viennoiserie,gateau,tarte,pain de mie'],
+  ['viande', 'Boucherie et poisson', '#C2473B', 'viande,poulet,jambon,saucisse,steak,poisson,saumon,thon,crevette,lardon,dinde,boeuf,porc,merguez,veau,saucisson,charcuterie,cabillaud'],
+  ['cremerie', 'Crèmerie', '#4A8FD4', 'lait,beurre,yaourt,fromage,oeuf,creme,emmental,mozzarella,gruyere,skyr,parmesan,chevre,fromage blanc'],
+  ['epicerie', 'Épicerie', '#9A6B3E', 'pate,riz,farine,sucre,sel,huile,vinaigre,conserve,sauce,cafe,the,cereale,biscuit,chocolat,confiture,miel,lentille,chips,epice,moutarde,ketchup,mayonnaise,compote'],
+  ['surgele', 'Surgelés', '#3BA6B5', 'surgele,glace,pizza,frite,nugget'],
+  ['boissons', 'Boissons', '#7A5BC4', 'eau,jus,soda,biere,vin,cola,sirop,limonade,rose,champagne,pastis'],
+  ['hygiene', 'Hygiène et beauté', '#D0589B', 'shampoing,savon,dentifrice,gel douche,deodorant,rasoir,coton,couche,papier toilette,mouchoir,brosse a dents,creme solaire'],
+  ['menage', 'Ménage et entretien', '#D98A1F', 'lessive,liquide vaisselle,vaisselle,eponge,sac poubelle,javel,nettoyant,essuie-tout,adoucissant,papier alu,film aluminium,sopalin,lave-vaisselle,pastille,wc,detartrant'],
   ['autres', 'Autres', '#7B8580', '']
-].map(([id, name, color, kw]) => ({ id, name, color, re: kw.split(' ').filter(Boolean).map(w => new RegExp('(^|[^a-z])' + w.replace(/[-]/g, '[- ]'))) }));
-const rayon = id => RAYONS.find(r => r.id === id) || RAYONS[RAYONS.length - 1];
+].map(([id, name, color, kw]) => ({ id, name, color, kw }));
+let RAYONS = [];
+function compile() {
+  const l = (M.rayons && M.rayons.length ? M.rayons : DEF).map(r => ({ ...r }));
+  if (!l.some(r => r.id === 'autres')) l.push({ ...DEF[DEF.length - 1] });
+  RAYONS = l.map(r => ({ ...r, re: String(r.kw || '').split(',').map(w => norm(w)).filter(Boolean).map(w => new RegExp('(^|[^a-z])' + w.replace(/[.*+?^${}()|[\]\\]/g, '\\$&').replace(/-/g, '[- ]'))) }));
+}
+const rayon = id => RAYONS.find(r => r.id === id) || RAYONS.find(r => r.id === 'autres');
 const guess = name => { const n = norm(name); let best = 'autres', bs = 0; for (const r of RAYONS) { const s = r.re.filter(x => x.test(n)).length; if (s > bs) { best = r.id; bs = s; } } return best; };
 
 /* ---------- état local ---------- */
 const META = 'courses_meta';
-let M = Object.assign({ fam: '', stores: ['Carrefour', 'Leclerc', 'Lidl', 'Intermarché', 'Monoprix', 'Picard'], habits: {}, relay: '', theme: 'auto' }, JSON.parse(localStorage.getItem(META) || '{}'));
+let M = Object.assign({ fam: '', stores: ['Carrefour', 'Leclerc', 'Lidl', 'Intermarché', 'Monoprix', 'Picard'], habits: {}, relay: '', theme: 'auto', rayons: null, rayonsTs: 0 }, JSON.parse(localStorage.getItem(META) || '{}'));
+compile();
 let items = [];
 const ikey = () => 'courses_items_' + (M.fam || 'local');
 try { items = JSON.parse(localStorage.getItem(ikey()) || '[]'); } catch (e) { items = []; }
@@ -55,13 +62,20 @@ function startSync() {
   if (unsub) unsub(); unsub = null;
   if (!F || !M.fam) return status();
   const { f, db } = F;
-  unsub = f.onSnapshot(f.collection(db, 'lists', M.fam, 'items'), snap => {
+  const u1 = f.onSnapshot(f.collection(db, 'lists', M.fam, 'items'), snap => {
     if (snap.empty && !snap.metadata.fromCache && items.length) {
       for (let i = 0; i < items.length; i += 400) { const b = f.writeBatch(db); items.slice(i, i + 400).forEach(x => b.set(ref(x.id), clean(x))); safe(b.commit()); }
     } else items = snap.docs.map(d => d.data());
     pending = snap.metadata.hasPendingWrites; saveItems(); render(); status();
   }, () => { $('#st').textContent = 'synchro impossible'; });
+  const u2 = f.onSnapshot(f.doc(db, 'lists', M.fam, 'meta', 'rayons'), s => {
+    const d = s.data();
+    if (d && d.ts > (M.rayonsTs || 0)) { try { M.rayons = JSON.parse(d.json); M.rayonsTs = d.ts; saveMeta(); compile(); render(); } catch (e) {} }
+    else if (!s.exists() && !s.metadata.fromCache && M.rayons) pushRayons();
+  }, () => {});
+  unsub = () => { u1(); u2(); };
 }
+const pushRayons = () => F && M.fam && safe(F.f.setDoc(F.f.doc(F.db, 'lists', M.fam, 'meta', 'rayons'), { json: JSON.stringify(M.rayons), ts: M.rayonsTs }));
 const status = () => { $('#st').textContent = !M.fam ? 'sur cet appareil' : !navigator.onLine ? 'hors ligne' : pending ? 'synchro…' : 'synchronisé'; };
 addEventListener('online', status); addEventListener('offline', status);
 
@@ -142,7 +156,7 @@ function edit(it) {
   <label>Article<input id="e-n" class="field" value="${esc(it.name)}"></label>
   <div class="two"><label>Quantité<input id="e-q" class="field" type="number" min="1" inputmode="numeric" value="${it.qty || 1}"></label>
   <label>Prix par unité (€)<input id="e-p" class="field" inputmode="decimal" value="${it.price != null ? String(it.price).replace('.', ',') : ''}"></label></div>
-  <label>Rayon<select id="e-c">${RAYONS.map(r => `<option value="${r.id}"${r.id === it.cat ? ' selected' : ''}>${r.name}</option>`).join('')}</select></label>
+  <label>Rayon<select id="e-c">${RAYONS.map(r => `<option value="${r.id}"${r.id === rayon(it.cat).id ? ' selected' : ''}>${r.name}</option>`).join('')}</select></label>
   <label>Magasin<select id="e-s"><option value="">Peu importe</option>${M.stores.map(s => `<option${s === it.store ? ' selected' : ''}>${esc(s)}</option>`).join('')}</select></label>
   <label>Note (marque, taille…)<input id="e-o" class="field" value="${esc(it.note)}"></label>
   <button class="btn p" id="e-ok">Enregistrer</button><button class="btn d" id="e-rm">Supprimer</button><button class="btn" data-x>Annuler</button>`);
@@ -187,6 +201,38 @@ $('#scan').onclick = async () => {
   } catch (e) { sheet.close(); toast('Caméra refusée ou indisponible.'); }
 };
 
+/* ---------- gestion des rayons ---------- */
+const cur = () => (M.rayons && M.rayons.length ? M.rayons : DEF).map(r => ({ id: r.id, name: r.name, color: r.color, kw: r.kw }));
+function saveRayons(l) { M.rayons = l; M.rayonsTs = Date.now(); saveMeta(); compile(); render(); pushRayons(); }
+function manageRayons() {
+  const l = cur();
+  open('<h2>Rayons</h2><p class="hint">L’ordre ci-dessous est l’ordre d’affichage dans la liste.</p>' + l.map((r, i) => `<div class="row"><i class="dot" style="background:${esc(r.color)}"></i><button class="nm" data-e="${i}"><b>${esc(r.name)}</b></button><button class="mv" data-u="${i}" aria-label="Monter ${esc(r.name)}"${i ? '' : ' disabled'}>↑</button><button class="mv" data-d="${i}" aria-label="Descendre ${esc(r.name)}"${i < l.length - 1 ? '' : ' disabled'}>↓</button></div>`).join('') +
+    '<button class="btn p" id="y-add">Ajouter un rayon</button><button class="btn" id="y-rs">Rétablir les rayons par défaut</button><button class="btn" id="y-bk">Retour aux réglages</button>');
+  const mv = (i, j) => { [l[i], l[j]] = [l[j], l[i]]; saveRayons(l); manageRayons(); };
+  sheet.querySelectorAll('[data-e]').forEach(b => b.onclick = () => editRayon(+b.dataset.e));
+  sheet.querySelectorAll('[data-u]').forEach(b => b.onclick = () => mv(+b.dataset.u, +b.dataset.u - 1));
+  sheet.querySelectorAll('[data-d]').forEach(b => b.onclick = () => mv(+b.dataset.d, +b.dataset.d + 1));
+  $('#y-add', sheet).onclick = () => editRayon(-1);
+  $('#y-rs', sheet).onclick = () => { if (confirm('Rétablir les rayons par défaut ? Vos rayons personnalisés seront perdus.')) { saveRayons(DEF.map(r => ({ ...r }))); manageRayons(); } };
+  $('#y-bk', sheet).onclick = () => $('#menu').onclick();
+}
+function editRayon(i) {
+  const l = cur(), r = i >= 0 ? l[i] : { id: 'r' + uid(), name: '', color: '#3E9B3A', kw: '' };
+  open(`<h2>${i >= 0 ? 'Modifier le rayon' : 'Nouveau rayon'}</h2>
+  <label>Nom<input id="y-n" class="field" value="${esc(r.name)}"></label>
+  <label>Couleur<input id="y-c" type="color" class="field" value="${esc(r.color)}" style="height:48px;padding:4px"></label>
+  <label>Mots-clés pour classer automatiquement (séparés par des virgules)<textarea id="y-k" rows="3">${esc(r.kw)}</textarea></label>
+  <button class="btn p" id="y-ok">Enregistrer</button>${i >= 0 && r.id !== 'autres' ? '<button class="btn d" id="y-rm">Supprimer</button>' : ''}<button class="btn" id="y-bk">Annuler</button>`);
+  $('#y-bk', sheet).onclick = manageRayons;
+  $('#y-ok', sheet).onclick = () => {
+    const name = $('#y-n', sheet).value.trim(); if (!name) return toast('Indiquez le nom du rayon.');
+    Object.assign(r, { name, color: $('#y-c', sheet).value, kw: $('#y-k', sheet).value.trim() });
+    if (i >= 0) l[i] = r; else { const k = l.findIndex(x => x.id === 'autres'); if (k < 0) l.push(r); else l.splice(k, 0, r); }
+    saveRayons(l); manageRayons();
+  };
+  if ($('#y-rm', sheet)) $('#y-rm', sheet).onclick = () => { if (confirm('Supprimer ce rayon ? Ses articles passeront dans « Autres ».')) { l.splice(i, 1); saveRayons(l); manageRayons(); } };
+}
+
 /* ---------- partage et réglages ---------- */
 function listText() {
   const L = [`Liste de courses du ${new Date().toLocaleDateString('fr-FR')}`];
@@ -211,11 +257,13 @@ $('#menu').onclick = () => {
   <label>Liste partagée (code foyer)</label>
   ${M.fam ? `<p><b style="font:800 1.3rem ui-monospace,monospace;letter-spacing:2px">${M.fam}</b></p><button class="btn" id="r-cp">Copier le lien d’invitation</button><button class="btn d" id="r-qt">Quitter la liste partagée</button>`
     : `${F ? '<button class="btn p" id="r-new">Créer une liste partagée</button><input id="r-code" class="field" placeholder="Ou saisir un code reçu (8 à 20 caractères)" style="margin-top:10px"><button class="btn" id="r-join">Rejoindre</button>' : '<p class="hint">Synchro indisponible (voir firebase-config.js ou connexion).</p>'}`}
+  <button class="btn" id="r-ray">Gérer les rayons</button>
   <label>Magasins (séparés par des virgules)</label><input id="r-st" class="field" value="${esc(M.stores.join(', '))}">
   <label>Relais Cloudflare (facultatif, recherche par code-barres)</label><input id="r-rl" class="field" inputmode="url" autocapitalize="off" placeholder="https://courses-relais.xxx.workers.dev" value="${esc(M.relay)}">
   <p class="hint" id="r-msg" role="status"></p>
   <button class="btn p" id="r-ok">Enregistrer</button><button class="btn" data-x>Fermer</button>`);
   const s = id => $(id, sheet);
+  s('#r-ray').onclick = manageRayons;
   s('#r-th').value = M.theme || 'auto';
   s('#r-th').onchange = e => { M.theme = e.target.value; saveMeta(); applyTheme(); };
   if (s('#r-inst')) s('#r-inst').onclick = async () => {

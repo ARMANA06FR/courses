@@ -22,5 +22,11 @@ service cloud.firestore {
         && request.resource.data.keys().hasOnly(['id','name','qty','cat','store','price','note','done','img','ts'])
         && request.resource.data.name is string && request.resource.data.name.size() < 120;
     }
+    match /lists/{code}/meta/{id} {
+      allow get, delete: if code.size() >= 8 && code.size() <= 20;
+      allow create, update: if code.size() >= 8 && code.size() <= 20
+        && request.resource.data.keys().hasOnly(['json','ts'])
+        && request.resource.data.json is string && request.resource.data.json.size() < 20000;
+    }
   }
 }
